@@ -1,0 +1,18 @@
+# Environment / secrets
+.env
+# service account keys
+*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Model outputs / results (may contain business data)
+results/
+
+# Notebooks with potentially sensitive outputs
+fit_model.ipynb
