@@ -1,21 +1,77 @@
-# Marketing Mix Modeling — Demo
+# 📊 Marketing Mix Modeling — Interactive Demo
 
-A full-stack Bayesian MMM built to demonstrate the complete analytics workflow:
-synthetic data generation → Bayesian model fitting → interactive dashboard → cloud data warehouse → LLM-powered Q&A.
+> *How much of your sales actually came from that TV campaign? And was it worth it compared to digital?*
+> This app answers those questions — with math you can verify.
 
-Because the dataset is **synthetic with known parameters**, model accuracy is objectively verifiable — something real-world MMM projects cannot offer.
+A full end-to-end **Marketing Mix Modeling (MMM)** platform built in Python: synthetic data generation with known ground truth, two fitted models (Ridge + Bayesian), an interactive 6-tab Streamlit dashboard, BigQuery cloud sync, and a Gemini-powered natural language interface to query your results.
 
 ---
 
-## What it does
+## What is Marketing Mix Modeling?
 
-**Marketing Mix Modeling (MMM)** answers: *how much did each marketing channel contribute to sales?*
-It accounts for two real-world effects that simple regression ignores:
+Imagine you spend money across TV, Digital, Social, and Out-of-Home advertising every week, and your sales go up and down. How do you know *which channel caused which sales*? Simple correlation doesn't work — there are at least two effects that break it:
 
-- **Adstock (carry-over):** A TV ad from last week still drives sales this week
-- **Saturation (diminishing returns):** Doubling spend doesn't double sales
+**Adstock (carry-over effect)**
+An ad doesn't just drive sales on the day it runs. A TV spot on Monday still influences buying decisions on Friday, or even next week. This "memory" effect decays over time — some channels (TV, OOH) have long carry-over, others (Social) fade quickly.
 
-This demo fits a Bayesian model (PyMC-Marketing) on 2 years of weekly data across 4 channels (TV, Digital, Social, OOH), then visualises the results in an interactive Streamlit dashboard.
+**Saturation (diminishing returns)**
+Doubling your ad budget does *not* double your sales. The first £10k of TV spend might generate £8k in incremental sales. The next £10k generates £5k. The next £10k generates £3k. Spend past the saturation point and you're wasting money.
+
+**MMM accounts for both.** It fits a model to your historical data that captures these non-linear effects — then decomposes your total sales into: *"this much came from trend/seasonality, this much from TV, this much from Digital..."* and finally tells you the **ROI per channel**.
+
+---
+
+## Why this demo is special: verifiable ground truth
+
+Most real-world MMM projects suffer from a fundamental problem: *you never know if the model is right*, because the true answer is unknowable from real data.
+
+This demo sidesteps that entirely. The dataset is **synthetically generated with known parameters baked in** — the true adstock decay, saturation points, and ROI for each channel are fixed upfront. The model's job is to *recover* these values from noisy observed data.
+
+This means model accuracy is **objectively measurable**, not just plausible-looking. You can see exactly how close the fitted ROIs are to the true ROIs.
+
+| Channel | True ROI | Adstock decay | Half-saturation |
+|---------|----------|---------------|-----------------|
+| TV | £0.55/£ | 0.70 (slow decay) | £30k/week |
+| Digital | £1.10/£ | 0.40 (fast decay) | £18k/week |
+| Social | £0.90/£ | 0.30 (very fast) | £9k/week |
+| OOH | £0.40/£ | 0.60 (medium decay) | £6k/week |
+
+---
+
+## The App — 6 tabs, zero setup required
+
+The dashboard loads instantly with Ridge regression results pre-fitted. No waiting, no configuration needed.
+
+### 🎯 Results
+The core MMM output. A stacked area chart decomposes every week's sales into baseline (trend + seasonality) and incremental contributions from each channel. KPI cards show model R², best-performing channel by ROI, and total media-driven revenue. Switch between ground-truth decomposition and model estimates side by side.
+
+### ⚙️ Budget Optimizer
+The most business-relevant tab. Drag sliders to reallocate budget across channels and instantly see projected media uplift. The optimizer applies the same adstock and saturation transforms the model learned — so the projections respect diminishing returns. This is how a marketing team would use MMM in practice: *"if I move £10k from TV to Digital, what happens to sales?"*
+
+### 📊 The Data
+Time series view of sales and all four channel spend series. Toggle channel visibility, normalize spend to 0–1 scale for fair visual comparison, and inspect the underlying raw data table.
+
+### 🔬 Explore
+EDA panel: correlation heatmap, scatter plots between any two variables, and spend distribution histograms. Useful for understanding seasonality patterns and channel co-movement before trusting the model.
+
+### 🔗 Cloud Sync
+Push the dataset and model results to **Google BigQuery** with one click. Auto-loads existing results from BigQuery on startup if credentials are configured — so model outputs persist across sessions in the cloud.
+
+### 💬 Ask Gemini
+Natural language interface powered by **Gemini Data Analytics**. Ask questions like *"which channel had the highest ROI?"* or *"show me total spend by channel as a bar chart"* — Gemini queries the BigQuery tables and renders the answer with auto-generated Plotly charts.
+
+---
+
+## Two models, one dashboard
+
+| | Ridge Regression | Bayesian (PyMC-Marketing) |
+|---|---|---|
+| Speed | Instant | ~10 min (Colab) |
+| Uncertainty | None | Full posterior HDI intervals |
+| Best for | Live demo / exploration | Rigorous analysis |
+| How to load | Auto-runs on startup | Drop 3 CSVs into `results/` |
+
+The app detects which results are available and switches automatically. Both use identical adstock (geometric) and saturation (Hill) transforms.
 
 ---
 
@@ -26,30 +82,31 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The dashboard auto-loads Ridge regression results on startup (no model fitting required).
+Open [http://localhost:8501](http://localhost:8501) — the dashboard starts immediately with Ridge results.
 
 ---
 
-## For full Bayesian results
+## For full Bayesian results (optional)
 
 1. Open `fit_model.ipynb` in [Google Colab](https://colab.research.google.com)
-2. Run all cells (takes ~10 min on Colab CPU)
-3. Download the 3 CSV files from Cell 6a–6c
+2. Run all cells (~10 min on Colab CPU)
+3. Download the 3 output CSVs
 4. Place them in a `results/` folder next to `app.py`
-5. Restart the Streamlit app — it auto-loads the Bayesian results
+5. Restart the Streamlit app — Bayesian results load automatically
 
 ---
 
-## Dashboard tabs
+## BigQuery + Gemini setup (optional)
 
-| Tab | What you'll find |
-|-----|-----------------|
-| 🎯 Results | Sales decomposition chart, fitted vs actual, channel ROI and contributions |
-| ⚙️ Budget Optimizer | Interactive sliders to reallocate spend and see projected media uplift |
-| 📊 The Data | Time series of sales and channel spend |
-| 🔬 Explore | Correlations, scatter plots, distributions |
-| 🔗 Cloud Sync | Push data to BigQuery (requires GCP credentials) |
-| 💬 Ask Gemini | Natural-language Q&A on data stored in BigQuery |
+Copy `.env.example` to `.env` and fill in your GCP details:
+
+```
+GOOGLE_CLOUD_PROJECT=your-project-id
+BQ_DATASET=your-dataset-name
+BQ_LOCATION=EU
+GOOGLE_APPLICATION_CREDENTIALS=service_account.json
+BQ_AGENT_ID=your-gemini-agent-id
+```
 
 ---
 
@@ -58,11 +115,12 @@ The dashboard auto-loads Ridge regression results on startup (no model fitting r
 | Layer | Technology |
 |-------|-----------|
 | Dashboard | Streamlit |
+| Visualisation | Plotly |
 | Bayesian MMM | PyMC-Marketing (GeometricAdstock + LogisticSaturation) |
-| Quick-fit fallback | scikit-learn Ridge regression |
+| Quick-fit model | scikit-learn Ridge regression |
 | Data warehouse | Google BigQuery |
 | LLM Q&A | Gemini Data Analytics API |
-| Visualisation | Plotly |
+| Data | Synthetic — generated with NumPy, known ground truth |
 
 ---
 
@@ -70,41 +128,15 @@ The dashboard auto-loads Ridge regression results on startup (no model fitting r
 
 ```
 MMM/
-├── app.py                  # Main Streamlit dashboard (6 tabs)
+├── app.py                  # Main Streamlit dashboard (6 tabs, ~700 lines)
 ├── bq_agent.py             # BigQuery upload/query + Gemini chat wrapper
 ├── fit_model.ipynb         # Bayesian fitting notebook (run in Colab)
-├── requirements.txt        # Python dependencies
-├── .env.example            # Environment variable template
-├── results/                # Pre-baked Bayesian CSVs (place here after Colab run)
+├── requirements.txt
+├── .env.example
+├── results/                # Drop Bayesian CSVs here (auto-detected on startup)
 │   ├── mmm_model_results.csv
 │   ├── mmm_fitted_values.csv
 │   └── mmm_contrib_hdi.csv
-└── prompts.md              # LLM prompting strategy notes
+└── prompts.md              # Gemini prompting strategy
 ```
 
----
-
-## Ground-truth parameters (synthetic data)
-
-| Channel | True ROI | Adstock decay | Half-saturation |
-|---------|----------|---------------|-----------------|
-| TV | £0.55/£ | 0.70 | £30k/week |
-| Digital | £1.10/£ | 0.40 | £18k/week |
-| Social | £0.90/£ | 0.30 | £9k/week |
-| OOH | £0.40/£ | 0.60 | £6k/week |
-
-The model's task is to recover these values from noisy observed data.
-
----
-
-## BigQuery / Gemini setup
-
-Copy `.env.example` to `.env` and fill in:
-
-```
-GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-BQ_DATASET=your-dataset-name
-BQ_LOCATION=EU
-GOOGLE_APPLICATION_CREDENTIALS=service_account.json
-BQ_AGENT_ID=your-gemini-agent-id
-```
