@@ -1,7 +1,3 @@
-"""
-Marketing Mix Modeling — Interview Demo
-Interactive dashboard: sales decomposition, budget optimizer, EDA, BigQuery + Gemini chat.
-"""
 
 import os
 import re
@@ -327,7 +323,7 @@ if bq_project and "bq_data_loaded" not in st.session_state:
 
 
 # ── Header ─────────────────────────────────────────────────────────────────────
-st.title("📊 Marketing Mix Modeling")
+st.title("📊 Marketing Mix Modeling | Spend Optimizer")
 st.markdown(
     "Bayesian MMM on 2 years of synthetic weekly data — 4 channels, known ground truth. "
     "Decompose sales, explore the data, optimise your budget, and query results via Gemini."
