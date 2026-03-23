@@ -15,4 +15,4 @@ __pycache__/
 results/
 
 # Notebooks with potentially sensitive outputs
-fit_model.ipynb
+# fit_model.ipynb — safe to track (synthetic data only, no real outputs)
