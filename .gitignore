@@ -13,7 +13,11 @@ __pycache__/
 secrets.toml
 
 # Model outputs / results (may contain business data)
-results/
+results/*
+# Exception: pre-baked synthetic Bayesian results (no real data, needed for Streamlit Cloud)
+!results/mmm_model_results.csv
+!results/mmm_fitted_values.csv
+!results/mmm_contrib_hdi.csv
 
 # Notebooks with potentially sensitive outputs
 # fit_model.ipynb — safe to track (synthetic data only, no real outputs)
