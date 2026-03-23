@@ -323,7 +323,7 @@ if bq_project and "bq_data_loaded" not in st.session_state:
 
 
 # ── Header ─────────────────────────────────────────────────────────────────────
-st.title("📊 Marketing Mix Modeling | Spend Optimizer")
+st.title("Marketing Mix Modeling | Spend Optimizer")
 st.markdown(
     "Bayesian MMM on 2 years of synthetic weekly data — 4 channels, known ground truth. "
     "Decompose sales, explore the data, optimise your budget, and query results via Gemini."
@@ -367,7 +367,7 @@ with st.sidebar:
     normalize = st.checkbox("Normalize spend (0–1 scale)", value=False)
     show_raw  = st.checkbox("Show raw data table", value=False)
 
-    with st.expander("Advanced"):
+    with st.expander("Advanced configuration"):
         n_fourier = st.slider("Fourier seasonality terms", 1, 4, 2)
         if st.button("Re-fit Ridge", help="Re-run Ridge regression with current Fourier setting"):
             _r_summary, _r_fitted, _r_hdi, _r_r2 = _run_ridge(df, n_fourier)
@@ -379,14 +379,41 @@ with st.sidebar:
             st.session_state.pop("bayesian_fitted_missing", None)
             st.rerun()
 
+        st.divider()
+        st.markdown("#### Cloud Sync")
+        st.markdown(
+            "Push training data and model results to **Google BigQuery** to power "
+            "natural-language Q&A in the Ask Gemini tab."
+        )
+
+        if bq_project:
+            st.success("Connected to BigQuery")
+        else:
+            st.warning("No GCP project configured. Set `GOOGLE_CLOUD_PROJECT` and `BQ_DATASET` in `.env`.")
+
+        has_results = "summary" in st.session_state
+        has_fitted  = "fitted_values" in st.session_state
+
+        if st.button("⬆ Upload training data", disabled=not bq_project):
+            with st.spinner("Uploading…"):
+                upload_to_bq(df, "mmm_training_data", bq_project, bq_dataset)
+            st.success("Done — `mmm_training_data`")
+        if st.button("⬆ Upload model results", disabled=not (bq_project and has_results)):
+            with st.spinner("Uploading…"):
+                upload_to_bq(st.session_state["summary"], "mmm_model_results", bq_project, bq_dataset)
+            st.success("Done — `mmm_model_results`")
+        if st.button("⬆ Upload fitted values", disabled=not (bq_project and has_fitted)):
+            with st.spinner("Uploading…"):
+                upload_to_bq(st.session_state["fitted_values"], "mmm_fitted_values", bq_project, bq_dataset)
+            st.success("Done — `mmm_fitted_values`")
+
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_results, tab_budget, tab_ts, tab_explore, tab_bq, tab_chat = st.tabs([
+tab_results, tab_budget, tab_ts, tab_explore, tab_chat = st.tabs([
     "🎯 Results",
     "⚙️ Budget Optimizer",
     "📊 The Data",
     "🔬 Explore",
-    "🔗 Cloud Sync",
     "💬 Ask Gemini",
 ])
 
@@ -579,96 +606,164 @@ with tab_results:
 # TAB 2 — Budget Optimizer
 # ════════════════════════════════════════════════════════════════════════════
 with tab_budget:
+    from scipy.optimize import minimize
+
     st.info(
-        "Adjust the weekly spend per channel to see how reallocation affects projected media-driven sales. "
-        "The optimizer uses the ground-truth response curves (adstock + saturation) to project outcomes. "
-        "**Assumes marginal reallocation** around current spending levels with steady-state adstock."
+        "Set a total weekly budget and the optimizer will automatically find the best spend "
+        "allocation across channels to maximise projected media-driven sales. "
+        "Uses ground-truth response curves (adstock + Hill saturation) with steady-state adstock."
     )
 
-    # Helper: annual contribution from a constant weekly spend (steady-state adstock)
+    # Helper: annual media contribution from a constant weekly spend (steady-state adstock)
     def _steady_state_annual(weekly_spend: float, ch: str, n_weeks: int = 104) -> float:
         ads_ss = weekly_spend / (1 - TRUE_DECAY[ch])
         sat = float(hill(np.array([ads_ss]), TRUE_HALF_SAT[ch])[0]) * TRUE_HALF_SAT[ch]
         return TRUE_ROI[ch] * sat * n_weeks
 
-    current_weekly = {ch: float(df[ch].mean()) for ch in channel_cols}
+    current_weekly       = {ch: float(df[ch].mean()) for ch in channel_cols}
     original_weekly_total = sum(current_weekly.values())
-    current_annual = {ch: _steady_state_annual(current_weekly[ch], ch) for ch in channel_cols}
+    current_annual       = {ch: _steady_state_annual(current_weekly[ch], ch) for ch in channel_cols}
+    current_annual_total  = sum(current_annual.values())
 
-    # ── Sliders ────────────────────────────────────────────────────────────
-    st.subheader("Weekly spend allocation")
-    st.caption("Drag sliders to reallocate budget. Default = current average weekly spend per channel.")
+    # ── Total budget slider ─────────────────────────────────────────────────
+    st.subheader("Total weekly budget")
+    total_budget = st.slider(
+        "Weekly budget to allocate",
+        min_value=int(original_weekly_total * 0.25),
+        max_value=int(original_weekly_total * 3.0),
+        value=int(original_weekly_total),
+        step=500,
+        format="£%d",
+        key="total_budget_slider",
+    )
 
-    slider_cols = st.columns(len(channel_cols))
-    new_weekly = {}
-    for i, ch in enumerate(channel_cols):
-        with slider_cols[i]:
-            new_weekly[ch] = st.slider(
-                CHANNEL_LABELS[ch],
-                min_value=0,
-                max_value=int(current_weekly[ch] * 2),
-                value=int(current_weekly[ch]),
-                step=500,
-                format="£%d",
-                key=f"budget_slider_{ch}",
-            )
-
-    # ── Budget tracker & headline metric ───────────────────────────────────
-    new_weekly_total = sum(new_weekly.values())
-    budget_delta     = new_weekly_total - original_weekly_total
+    budget_delta     = total_budget - original_weekly_total
     budget_delta_pct = budget_delta / original_weekly_total * 100
 
-    projected_annual      = {ch: _steady_state_annual(new_weekly[ch], ch) for ch in channel_cols}
-    projected_annual_total = sum(projected_annual.values())
-    current_annual_total   = sum(current_annual.values())
-    uplift                 = projected_annual_total - current_annual_total
-    uplift_pct             = uplift / current_annual_total * 100 if current_annual_total > 0 else 0.0
+    # ── Optimise allocation ─────────────────────────────────────────────────
+    n_ch = len(channel_cols)
 
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Original weekly budget",  f"£{original_weekly_total:,.0f}")
+    def _neg_total(w):
+        return -sum(_steady_state_annual(w[i], ch) for i, ch in enumerate(channel_cols))
+
+    opt = minimize(
+        _neg_total,
+        x0=[total_budget / n_ch] * n_ch,
+        method="SLSQP",
+        bounds=[(0, total_budget)] * n_ch,
+        constraints={"type": "eq", "fun": lambda w: w.sum() - total_budget},
+        options={"ftol": 1e-9, "maxiter": 500},
+    )
+    optimal_weekly       = {ch: float(opt.x[i]) for i, ch in enumerate(channel_cols)}
+    optimal_annual       = {ch: _steady_state_annual(optimal_weekly[ch], ch) for ch in channel_cols}
+    optimal_annual_total  = sum(optimal_annual.values())
+    uplift               = optimal_annual_total - current_annual_total
+    uplift_pct           = uplift / current_annual_total * 100 if current_annual_total > 0 else 0.0
+
+    # ── Headline metrics ────────────────────────────────────────────────────
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Current weekly budget", f"£{original_weekly_total:,.0f}")
     m2.metric(
-        "New weekly budget", f"£{new_weekly_total:,.0f}",
+        "New weekly budget", f"£{total_budget:,.0f}",
         delta=f"£{budget_delta:+,.0f} ({budget_delta_pct:+.1f}%)",
-        delta_color="inverse",  # overspending = red
+        delta_color="off",
     )
     m3.metric(
-        "Projected media uplift (104 wks)",
-        f"£{projected_annual_total / 1e6:.2f}M",
+        "Current media contribution (104 wks)",
+        f"£{current_annual_total / 1e6:.2f}M",
+    )
+    m4.metric(
+        "Optimised media contribution (104 wks)",
+        f"£{optimal_annual_total / 1e6:.2f}M",
         delta=f"£{uplift / 1e3:+.0f}k ({uplift_pct:+.1f}%)",
     )
 
-    # ── Before / After bar chart ────────────────────────────────────────────
+    st.divider()
+
     ch_labels = [CHANNEL_LABELS[ch] for ch in channel_cols]
-    fig_budget = go.Figure()
-    fig_budget.add_trace(go.Bar(
-        name="Current allocation",
-        x=ch_labels,
-        y=[current_annual[ch] / 1e3 for ch in channel_cols],
-        marker_color="#636EFA",
-        text=[f"£{current_annual[ch] / 1e3:.0f}k" for ch in channel_cols],
-        textposition="outside",
-    ))
-    fig_budget.add_trace(go.Bar(
-        name="Projected allocation",
-        x=ch_labels,
-        y=[projected_annual[ch] / 1e3 for ch in channel_cols],
-        marker_color="#EF553B",
-        text=[f"£{projected_annual[ch] / 1e3:.0f}k" for ch in channel_cols],
-        textposition="outside",
-    ))
-    fig_budget.update_layout(
-        barmode="group",
-        height=380, template="plotly_white",
-        yaxis_title="Media contribution over 104 weeks (£k)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(t=40, b=30),
-    )
-    st.plotly_chart(fig_budget, use_container_width=True)
+
+    def _effective_roi(annual_contrib, weekly_spend, n_weeks=104):
+        total_spend = weekly_spend * n_weeks
+        return annual_contrib / total_spend if total_spend > 0 else 0.0
+
+    current_roi = {ch: _effective_roi(current_annual[ch], current_weekly[ch]) for ch in channel_cols}
+    optimal_roi = {ch: _effective_roi(optimal_annual[ch], optimal_weekly[ch]) for ch in channel_cols}
+
+    col_roi, col_alloc = st.columns(2)
+
+    # ── ROI chart ───────────────────────────────────────────────────────────
+    with col_roi:
+        st.subheader("Effective ROI per channel")
+        fig_roi = go.Figure()
+        fig_roi.add_trace(go.Bar(
+            name="Current",
+            x=ch_labels,
+            y=[current_roi[ch] for ch in channel_cols],
+            marker_color="#636EFA",
+            text=[f"{current_roi[ch]:.2f}x" for ch in channel_cols],
+            textposition="outside",
+        ))
+        fig_roi.add_trace(go.Bar(
+            name="Optimised",
+            x=ch_labels,
+            y=[optimal_roi[ch] for ch in channel_cols],
+            marker_color="#00CC96",
+            text=[f"{optimal_roi[ch]:.2f}x" for ch in channel_cols],
+            textposition="outside",
+        ))
+        fig_roi.update_layout(
+            barmode="group",
+            height=380, template="plotly_white",
+            yaxis_title="Effective ROI (£ sales per £ spent)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=10, b=30),
+        )
+        st.plotly_chart(fig_roi, use_container_width=True)
+
+    # ── Spend allocation chart ──────────────────────────────────────────────
+    with col_alloc:
+        st.subheader("Spend allocation")
+        fig_alloc = go.Figure()
+        fig_alloc.add_trace(go.Bar(
+            name="Current",
+            x=ch_labels,
+            y=[current_weekly[ch] for ch in channel_cols],
+            marker_color="#636EFA",
+            text=[f"£{current_weekly[ch]:,.0f}" for ch in channel_cols],
+            textposition="outside",
+        ))
+        fig_alloc.add_trace(go.Bar(
+            name="Optimised",
+            x=ch_labels,
+            y=[optimal_weekly[ch] for ch in channel_cols],
+            marker_color="#00CC96",
+            text=[f"£{optimal_weekly[ch]:,.0f}" for ch in channel_cols],
+            textposition="outside",
+        ))
+        fig_alloc.update_layout(
+            barmode="group",
+            height=380, template="plotly_white",
+            yaxis_title="Weekly spend (£)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=10, b=30),
+        )
+        st.plotly_chart(fig_alloc, use_container_width=True)
+
+    # ── Allocation detail table ─────────────────────────────────────────────
+    with st.expander("Allocation detail"):
+        alloc_df = pd.DataFrame({
+            "Channel":            [CHANNEL_LABELS[ch] for ch in channel_cols],
+            "Current spend/wk":   [f"£{current_weekly[ch]:,.0f}" for ch in channel_cols],
+            "Optimised spend/wk": [f"£{optimal_weekly[ch]:,.0f}" for ch in channel_cols],
+            "Change":             [f"£{optimal_weekly[ch] - current_weekly[ch]:+,.0f}" for ch in channel_cols],
+            "Share of budget":    [f"{optimal_weekly[ch] / total_budget * 100:.1f}%" for ch in channel_cols],
+        })
+        st.dataframe(alloc_df, use_container_width=True, hide_index=True)
 
     st.caption(
         "**Note:** Projections use ground-truth simulation parameters and assume constant weekly spend "
-        "(steady-state adstock). This approximates the marginal impact of reallocation; "
-        "it is not an absolute forecast of total sales."
+        "(steady-state adstock). The optimiser maximises total media-driven sales contribution "
+        "subject to the total budget constraint. This is not an absolute forecast of total sales."
     )
 
 
@@ -821,61 +916,32 @@ with tab_explore:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 5 — Cloud Sync
-# ════════════════════════════════════════════════════════════════════════════
-with tab_bq:
-    st.markdown("### BigQuery Integration")
-    st.markdown(
-        "Push training data and model results to **Google BigQuery** to power "
-        "natural-language Q&A in the Ask Gemini tab. Requires a GCP project configured in `.env`."
-    )
-
-    if bq_project:
-        st.success("Connected to BigQuery")
-    else:
-        st.warning(
-            "No GCP project configured. Set `GOOGLE_CLOUD_PROJECT` and `BQ_DATASET` in `.env` to enable sync."
-        )
-
-    has_results = "summary" in st.session_state
-    has_fitted  = "fitted_values" in st.session_state
-
-    st.subheader("Upload to BigQuery")
-    bq_col1, bq_col2, bq_col3 = st.columns(3)
-
-    with bq_col1:
-        st.markdown("**Training data**")
-        st.caption("104 weeks × 5 columns (date, 4 channels, sales)")
-        if st.button("⬆ Upload training data", disabled=not bq_project):
-            with st.spinner("Uploading…"):
-                upload_to_bq(df, "mmm_training_data", bq_project, bq_dataset)
-            st.success(f"Done — `mmm_training_data`")
-
-    with bq_col2:
-        st.markdown("**Model results**")
-        st.caption("Channel contributions, ROI, and spend summary")
-        if st.button("⬆ Upload model results", disabled=not (bq_project and has_results)):
-            with st.spinner("Uploading…"):
-                upload_to_bq(st.session_state["summary"], "mmm_model_results", bq_project, bq_dataset)
-            st.success(f"Done — `mmm_model_results`")
-
-    with bq_col3:
-        st.markdown("**Fitted values**")
-        st.caption("Weekly predicted vs actual sales")
-        if st.button("⬆ Upload fitted values", disabled=not (bq_project and has_fitted)):
-            with st.spinner("Uploading…"):
-                upload_to_bq(st.session_state["fitted_values"], "mmm_fitted_values", bq_project, bq_dataset)
-            st.success(f"Done — `mmm_fitted_values`")
-
-    if not has_results:
-        st.caption("Results are computed automatically on startup.")
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# TAB 6 — Ask Gemini
+# TAB 5 — Ask Gemini
 # ════════════════════════════════════════════════════════════════════════════
 with tab_chat:
     st.markdown("### Ask Gemini about your MMM data")
+
+    # ── Access gate ────────────────────────────────────────────────────────────
+    try:
+        _access_code = st.secrets.get("CHAT_ACCESS_CODE", "")
+    except Exception:
+        _access_code = ""
+    _access_code = _access_code or os.environ.get("CHAT_ACCESS_CODE", "")
+    if "chat_unlocked" not in st.session_state:
+        st.session_state.chat_unlocked = not _access_code  # unlocked if no code configured
+
+    if not st.session_state.chat_unlocked:
+        st.info("This feature is restricted. Enter the access code to continue.")
+        _pwd = st.text_input("Access code", type="password", label_visibility="collapsed")
+        if st.button("Unlock chat"):
+            if _pwd == _access_code:
+                st.session_state.chat_unlocked = True
+                st.rerun()
+            else:
+                st.error("Incorrect access code.")
+        st.stop()
+    # ── End gate ───────────────────────────────────────────────────────────────
+
     st.markdown(
         "Ask natural-language questions about the training data or model results stored in BigQuery. "
         "Gemini generates SQL, runs it against your tables, and returns insights with charts."
