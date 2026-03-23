@@ -46,7 +46,7 @@ The dashboard loads instantly with Ridge regression results pre-fitted. No waiti
 The core MMM output. A stacked area chart decomposes every week's sales into baseline (trend + seasonality) and incremental contributions from each channel. KPI cards show model R², best-performing channel by ROI, and total media-driven revenue. Switch between ground-truth decomposition and model estimates side by side.
 
 ### ⚙️ Budget Optimizer
-The most business-relevant tab. Drag sliders to reallocate budget across channels and instantly see projected media uplift. The optimizer applies the same adstock and saturation transforms the model learned — so the projections respect diminishing returns. This is how a marketing team would use MMM in practice: *"if I move £10k from TV to Digital, what happens to sales?"*
+The most business-relevant tab. Set a **total weekly budget** with a single slider and the optimizer automatically finds the best allocation across channels to maximise projected media-driven sales. It uses `scipy` SLSQP constrained optimisation with the same adstock and saturation response curves the model learned — so diminishing returns are fully respected. Results are shown as two side-by-side charts: **Effective ROI per channel** (£ sales generated per £ spent, current vs. optimised) and **Spend allocation** (current vs. optimised weekly spend per channel). This is how a marketing team would use MMM in practice: *"given my budget, where should I put every pound?"*
 
 ### 📊 The Data
 Time series view of sales and all four channel spend series. Toggle channel visibility, normalize spend to 0–1 scale for fair visual comparison, and inspect the underlying raw data table.
