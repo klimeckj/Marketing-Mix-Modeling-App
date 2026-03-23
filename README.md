@@ -21,7 +21,7 @@ Doubling your ad budget does *not* double your sales. The first £10k of TV spen
 
 ---
 
-## Why this demo is special: verifiable ground truth
+## Advantage of Bayesian approach
 
 Most real-world MMM projects suffer from a fundamental problem: *you never know if the model is right*, because the true answer is unknowable from real data.
 
