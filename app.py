@@ -10,10 +10,21 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
+import streamlit as st
+
+# Bridge Streamlit Cloud secrets → os.environ (no-op when running locally)
+_BRIDGE_KEYS = ["GOOGLE_CLOUD_PROJECT", "BQ_DATASET", "BQ_LOCATION", "BQ_AGENT_ID",
+                "GOOGLE_APPLICATION_CREDENTIALS"]
+try:
+    for _k in _BRIDGE_KEYS:
+        if _k in st.secrets and not os.environ.get(_k):
+            os.environ[_k] = st.secrets[_k]
+except Exception:
+    pass
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import streamlit as st
 from plotly.subplots import make_subplots
 
 from bq_agent import ask_bq_agent, format_response, load_from_bq, upload_to_bq

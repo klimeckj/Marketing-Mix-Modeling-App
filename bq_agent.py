@@ -17,13 +17,34 @@ import requests
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_credentials():
-    """Return refreshed service account credentials from GOOGLE_APPLICATION_CREDENTIALS."""
+    """Return refreshed service account credentials.
+
+    Checks for a ``[gcp_service_account]`` section in ``st.secrets`` first
+    (Streamlit Cloud), then falls back to ``GOOGLE_APPLICATION_CREDENTIALS``
+    file (local dev).
+    """
     from google.oauth2 import service_account
     import google.auth.transport.requests
 
+    SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
+
+    # Streamlit Cloud: credentials embedded in st.secrets
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "gcp_service_account" in st.secrets:
+            creds = service_account.Credentials.from_service_account_info(
+                dict(st.secrets["gcp_service_account"]),
+                scopes=SCOPES,
+            )
+            creds.refresh(google.auth.transport.requests.Request())
+            return creds
+    except Exception:
+        pass
+
+    # Local dev: credentials file
     creds = service_account.Credentials.from_service_account_file(
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
-        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+        scopes=SCOPES,
     )
     creds.refresh(google.auth.transport.requests.Request())
     return creds
