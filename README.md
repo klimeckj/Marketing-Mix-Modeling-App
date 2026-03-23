@@ -17,7 +17,7 @@ An ad doesn't just drive sales on the day it runs. A TV spot on Monday still inf
 **Saturation (diminishing returns)**
 Doubling your ad budget does *not* double your sales. The first £10k of TV spend might generate £8k in incremental sales. The next £10k generates £5k. The next £10k generates £3k. Spend past the saturation point and you're wasting money.
 
-**MMM accounts for both.** It fits a model to your historical data that captures these non-linear effects — then decomposes your total sales into: *"this much came from trend/seasonality, this much from TV, this much from Digital..."* and finally tells you the **ROI per channel**.
+**MMM accounts for both.** It fits a model to your historical data that captures these non-linear effects — then decomposes your total sales into: *"this much came from trend/seasonality, this much from TV, this much from Digital..."* and finally tells you the **ROI per channel**. And because it works entirely on aggregated weekly totals — total spend vs. total sales — there is no user-level tracking involved. MMM is inherently privacy-safe and unaffected by cookie deprecation.
 
 ---
 
@@ -27,7 +27,7 @@ Most real-world MMM projects suffer from a fundamental problem: *you never know 
 
 This demo sidesteps that entirely. The dataset is **synthetically generated with known parameters baked in** — the true adstock decay, saturation points, and ROI for each channel are fixed upfront. The model's job is to *recover* these values from noisy observed data.
 
-This means model accuracy is **objectively measurable**, not just plausible-looking. You can see exactly how close the fitted ROIs are to the true ROIs.
+This means model accuracy is **objectively measurable**, not just plausible-looking. You can see exactly how close the fitted ROIs are to the true ROIs — which also makes it a clean demonstration of what Bayesian MMM offers over simple regression. Rather than one number that implies false precision, the Bayesian model produces a full posterior distribution: you see where it's confident and where it isn't. It can also encode prior knowledge (past incrementality tests, industry benchmarks) directly into the fitting process, which is why it can reach reliable results with as little as 12–18 months of data rather than the 3+ years typically needed by traditional approaches.
 
 | Channel | True ROI | Adstock decay | Half-saturation |
 |---------|----------|---------------|-----------------|
