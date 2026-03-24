@@ -25,37 +25,12 @@ Both layers are needed. BQ instructions alone can drift on format. Code-side pre
 
 ## BQ Agent Instructions (set in GCP console)
 
-Current:
-> make your answer very short and effective. If you are replying with charts, pick some super simple and super easy to understand charts. If you are comparing different channels make sure that it is clear to see what channel connects to what output metrics.
+You analyze Marketing Mix Model (MMM) data (mmm_training_data, mmm_model_results). Strictly follow these rules:
 
-**Improved — copy this into the GCP console:**
-
-```
-You analyze Marketing Mix Model (MMM) data with two tables:
-
-mmm_training_data — weekly spend per channel and the output metric (sales/revenue).
-  Columns: date, [channel]_spend columns (e.g. tv_spend, digital_spend), sales (or revenue).
-
-mmm_model_results — model output: contribution and ROI per channel.
-  Columns: channel, contribution, roi, spend, baseline.
-
-Rules for every response:
-1. Answer in 2–3 sentences max. Lead with the key number or insight, not background.
-2. Never explain methodology or how MMM works unless explicitly asked.
-3. Round all numbers: use K for thousands, M for millions, 1 decimal max.
-4. For charts: use a simple bar chart only (no pie, no line unless time-series is the point).
-   - One chart per answer max.
-   - When comparing channels: channels on X-axis, metric on Y-axis, each bar labeled with its value.
-   - Color each channel bar differently so channels are instantly distinguishable.
-5. "Channels" = spend variables (tv, digital, social, etc.). "Output" = sales/revenue.
-   Never mix them on the same axis.
-```
-
-**Why this is better than the current instruction:**
-- Explicitly names the tables and columns so SQL generation is more accurate
-- Separates "channels" from "output" explicitly (prevents the agent from putting both on one axis)
-- Forces leading with the key number (prevents preamble)
-- Adds concrete chart formatting rules instead of vague "super simple"
+1. Text: Max 3 sentences. Lead with the core insight. No methodology explanations. Round numbers (K/M, 1 decimal max).
+2. Charts: Max 1 chart. Use a standard horizontal bar chart for comparisons (Parameters/Channels on Y-axis, Metric on X-axis).
+3. Visuals: Draw solid, filled bars. Label every bar with its value. Color-code distinct channels.
+4. Data Accuracy: The chart must visually include all data points mentioned in your text. Ensure axis limits accommodate the largest values. Never mix spend and output on the same axis.
 
 ---
 
@@ -76,19 +51,19 @@ This acts as a per-call reinforcement on top of the BQ agent's system instructio
 
 ---
 
-## What NOT to put in BQ instructions
+## Semantic Layer — BigQuery Glossary Terms
 
-- Don't repeat format rules that are already enforced by the code-side prefix — it creates noise
-- Don't describe what MMM is in general — the agent doesn't need a tutorial
-- Don't add "be helpful" or "be concise" vague guidance — be specific and imperative
+Where to add: **BigQuery UI → Agent Editor → Advanced Features → Glossary → Add term**
+Fields: **Term**, **Definition**, **Synonyms** (comma-separated). No Dataplex needed.
 
----
-
-## Quick Reference: Prompt Checklist
-
-Before changing any prompt, ask:
-- [ ] Does it lead with the key number/insight?
-- [ ] Is the chart type specified and constrained to bar?
-- [ ] Are channel labels visible on the chart?
-- [ ] Is the answer ≤ 3 sentences for factual questions?
-- [ ] Are the table/column names referenced correctly?
+| Term | Definition | Synonyms |
+|---|---|---|
+| TV | Television ad spend per week. Column `tv_spend`. Slowest decay (0.70), ROI £0.55/£. | television, broadcast, linear TV |
+| Digital | Online advertising spend per week. Column `digital_spend`. Highest ROI channel at £1.10/£. | online, paid search, PPC, display, performance marketing |
+| Social | Social media ad spend per week. Column `social_spend`. Fast decay, ROI £0.90/£. | social media, Facebook, Instagram, paid social |
+| OOH | Out-of-home ad spend per week. Column `ooh_spend`. Lowest ROI at £0.40/£. | out-of-home, outdoor, billboard, poster |
+| ROI | £ of incremental sales generated per £1 of ad spend. Column `roi` in `mmm_model_results`. | return on investment, return on ad spend, ROAS, effectiveness, payback |
+| Media contribution | Incremental sales attributed to a channel's advertising. Column `contribution` in `mmm_model_results`. Excludes baseline. | channel contribution, incremental revenue, lift, attributed sales, ad impact |
+| Baseline | Sales that would occur with zero advertising — organic demand and seasonality. Column `baseline` in `mmm_model_results`. | organic sales, base sales, non-media sales, underlying demand |
+| Adstock | Carry-over effect of advertising: each week's impact decays into future weeks. TV decays slowest (0.70), Social fastest (0.30). Not a stored column. | carry-over, advertising memory, decay, lagged effect |
+| Saturation | Diminishing returns on spend — each extra £1 generates less than the last. Half-saturation points: TV £30k, Digital £18k, Social £9k, OOH £6k/week. | diminishing returns, response curve, Hill curve, spend efficiency |
