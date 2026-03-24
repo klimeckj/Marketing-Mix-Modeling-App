@@ -58,12 +58,12 @@ Fields: **Term**, **Definition**, **Synonyms** (comma-separated). No Dataplex ne
 
 | Term | Definition | Synonyms |
 |---|---|---|
-| TV | Television ad spend per week. Column `tv_spend`. Slowest decay (0.70), ROI £0.55/£. | television, broadcast, linear TV |
-| Digital | Online advertising spend per week. Column `digital_spend`. Highest ROI channel at £1.10/£. | online, paid search, PPC, display, performance marketing |
-| Social | Social media ad spend per week. Column `social_spend`. Fast decay, ROI £0.90/£. | social media, Facebook, Instagram, paid social |
-| OOH | Out-of-home ad spend per week. Column `ooh_spend`. Lowest ROI at £0.40/£. | out-of-home, outdoor, billboard, poster |
-| ROI | £ of incremental sales generated per £1 of ad spend. Column `roi` in `mmm_model_results`. | return on investment, return on ad spend, ROAS, effectiveness, payback |
-| Media contribution | Incremental sales attributed to a channel's advertising. Column `contribution` in `mmm_model_results`. Excludes baseline. | channel contribution, incremental revenue, lift, attributed sales, ad impact |
+| TV | Television advertising spend per week. Maps to column `tv_spend` in `mmm_training_data`. | television, broadcast, linear TV |
+| Digital | Online advertising spend per week. Maps to column `digital_spend` in `mmm_training_data`. | online, paid search, PPC, display, performance marketing |
+| Social | Social media advertising spend per week. Maps to column `social_spend` in `mmm_training_data`. | social media, Facebook, Instagram, paid social |
+| OOH | Out-of-home advertising spend per week. Maps to column `ooh_spend` in `mmm_training_data`. | out-of-home, outdoor, billboard, poster |
+| ROI | £ of incremental sales generated per £1 of ad spend for a given channel. Query column `roi` in `mmm_model_results` for the actual value. | return on investment, return on ad spend, ROAS, effectiveness, payback |
+| Media contribution | Incremental sales attributed to a channel's advertising spend. Column `contribution` in `mmm_model_results`. Does not include baseline organic sales. | channel contribution, incremental revenue, lift, attributed sales, ad impact |
 | Baseline | Sales that would occur with zero advertising — organic demand and seasonality. Column `baseline` in `mmm_model_results`. | organic sales, base sales, non-media sales, underlying demand |
-| Adstock | Carry-over effect of advertising: each week's impact decays into future weeks. TV decays slowest (0.70), Social fastest (0.30). Not a stored column. | carry-over, advertising memory, decay, lagged effect |
-| Saturation | Diminishing returns on spend — each extra £1 generates less than the last. Half-saturation points: TV £30k, Digital £18k, Social £9k, OOH £6k/week. | diminishing returns, response curve, Hill curve, spend efficiency |
+| Adstock | The carry-over effect of advertising: impact from one week persists and decays into subsequent weeks. A modelling concept — not a stored column. | carry-over, advertising memory, decay, lagged effect |
+| Saturation | Diminishing returns on advertising spend — each additional £1 generates less incremental sales than the last. A modelling concept — not a stored column. | diminishing returns, response curve, Hill curve, spend efficiency |
