@@ -967,6 +967,12 @@ with tab_chat:
         for i, msg in enumerate(st.session_state.messages):
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
+                if msg["role"] == "assistant":
+                    if msg.get("bq_called"):
+                        st.caption("_BQ analytics agent queried_")
+                    if msg.get("thoughts"):
+                        with st.expander("Show thoughts"):
+                            st.markdown(msg["thoughts"][0])
                 is_last = i == len(st.session_state.messages) - 1
                 if is_last and msg["role"] == "assistant":
                     for vega_spec in st.session_state.pop("_last_charts", []):
@@ -1003,7 +1009,12 @@ with tab_chat:
                     response = ask_bq_agent(prompt, bq_project, bq_dataset, history=prior)
 
             answer = format_response(response)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": answer,
+                "thoughts": response.get("thoughts", []),
+                "bq_called": response.get("bq_called", False),
+            })
             if response.get("charts"):
                 st.session_state["_last_charts"] = response["charts"]
             if "_debug" in response:

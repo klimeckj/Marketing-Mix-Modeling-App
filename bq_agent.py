@@ -280,20 +280,37 @@ def call_orchestrator(question: str, session_id: str, orchestrator_url: str) -> 
 
     events = resp.json() if isinstance(resp.json(), list) else []
     answer_text = ""
-    for event in reversed(events):
+    thoughts = []
+    bq_called = False
+
+    for event in events:
         content = event.get("content", {})
+        parts = content.get("parts", [])
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            if part.get("functionCall", {}).get("name") == "call_bq_agent":
+                bq_called = True
+            if part.get("functionResponse", {}).get("name") == "call_bq_agent":
+                bq_called = True
         if content.get("role") == "model":
-            for part in content.get("parts", []):
-                if isinstance(part, dict) and part.get("text", "").strip():
-                    answer_text = part["text"].strip()
-                    break
-        if answer_text:
-            break
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+                text = part.get("text", "").strip()
+                if not text:
+                    continue
+                if part.get("thought") is True:
+                    thoughts.append(text)
+                else:
+                    answer_text = text
 
     return {
         "answer": answer_text or "_No response received from orchestrator._",
         "charts": [],
         "sql": "",
+        "thoughts": thoughts,
+        "bq_called": bq_called,
     }
 
 
