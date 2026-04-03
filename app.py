@@ -23,7 +23,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from bq_agent import ask_bq_agent, format_response, load_from_bq, upload_to_bq
+from bq_agent import ask_bq_agent, call_orchestrator, create_orchestrator_session, format_response, load_from_bq, upload_to_bq
 
 RESULTS_DIR = Path("results")
 
@@ -983,8 +983,25 @@ with tab_chat:
         elif prompt := st.chat_input("e.g. Which channel drove the most sales this year?"):
             st.session_state.messages.append({"role": "user", "content": prompt})
             prior = st.session_state.messages[:-1]
-            with st.spinner("Querying BigQuery agent…"):
-                response = ask_bq_agent(prompt, bq_project, bq_dataset, history=prior)
+
+            # Resolve orchestrator URL from Streamlit secrets or env var.
+            try:
+                _orchestrator_url = st.secrets.get("ORCHESTRATOR_URL", "")
+            except Exception:
+                _orchestrator_url = ""
+            _orchestrator_url = _orchestrator_url or os.environ.get("ORCHESTRATOR_URL", "")
+
+            if _orchestrator_url:
+                if "chat_session_id" not in st.session_state:
+                    st.session_state.chat_session_id = create_orchestrator_session(_orchestrator_url)
+                with st.spinner("Asking orchestrator…"):
+                    response = call_orchestrator(
+                        prompt, st.session_state.chat_session_id, _orchestrator_url
+                    )
+            else:
+                with st.spinner("Querying BigQuery agent…"):
+                    response = ask_bq_agent(prompt, bq_project, bq_dataset, history=prior)
+
             answer = format_response(response)
             st.session_state.messages.append({"role": "assistant", "content": answer})
             if response.get("charts"):

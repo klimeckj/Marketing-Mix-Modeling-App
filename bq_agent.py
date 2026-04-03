@@ -38,8 +38,8 @@ def _get_credentials():
             )
             creds.refresh(google.auth.transport.requests.Request())
             return creds
-    except Exception:
-        pass
+    except ImportError:
+        pass  # streamlit not available, fall through to local dev path
 
     # Local dev: credentials file
     creds = service_account.Credentials.from_service_account_file(
@@ -234,6 +234,66 @@ def ask_bq_agent(
         "sql": sql_text,
         "raw": raw_parts,
         "charts": vega_specs,
+    }
+
+
+def create_orchestrator_session(orchestrator_url: str, user_id: str = "streamlit_user") -> str:
+    """
+    Register a new session with the ADK orchestrator and return the server-assigned session ID.
+
+    Must be called once before the first ``call_orchestrator`` request.
+    The returned ID should be stored in ``st.session_state`` and reused for
+    the lifetime of the browser session.
+    """
+    url = f"{orchestrator_url.rstrip('/')}/apps/my_agent/users/{user_id}/sessions"
+    resp = requests.post(url, json={}, timeout=30)
+    resp.raise_for_status()
+    return resp.json()["id"]
+
+
+def call_orchestrator(question: str, session_id: str, orchestrator_url: str) -> dict:
+    """
+    Route a question through the ADK orchestrator running on Cloud Run.
+
+    The orchestrator decides whether to answer directly or delegate to the
+    BigQuery Conversational Analytics agent.  Returns the same shape as
+    ``ask_bq_agent`` so the caller can treat both paths identically.
+
+    ``session_id`` must be a server-side session ID obtained from
+    ``create_orchestrator_session`` before the first call.
+    """
+    url = f"{orchestrator_url.rstrip('/')}/run"
+    payload = {
+        "app_name": "my_agent",
+        "user_id": "streamlit_user",
+        "session_id": session_id,
+        "new_message": {
+            "role": "user",
+            "parts": [{"text": question}],
+        },
+    }
+    try:
+        resp = requests.post(url, json=payload, timeout=120)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        return {"answer": f"Orchestrator error: {exc}", "charts": [], "sql": ""}
+
+    events = resp.json() if isinstance(resp.json(), list) else []
+    answer_text = ""
+    for event in reversed(events):
+        content = event.get("content", {})
+        if content.get("role") == "model":
+            for part in content.get("parts", []):
+                if isinstance(part, dict) and part.get("text", "").strip():
+                    answer_text = part["text"].strip()
+                    break
+        if answer_text:
+            break
+
+    return {
+        "answer": answer_text or "_No response received from orchestrator._",
+        "charts": [],
+        "sql": "",
     }
 
 
