@@ -107,7 +107,7 @@ def ask_bq_agent(
     question: str,
     project_id: str,
     history: list = None,
-    agent_id: str = os.environ.get("BQ_AGENT_ID", ""),
+    agent_id: str = None,
 ) -> dict:
     """
     Ask a natural-language question via the Gemini Data Analytics API
@@ -123,6 +123,16 @@ def ask_bq_agent(
       "charts"  : list  – Vega-Lite chart specs
       "raw"     : list  – parsed streaming response chunks for debugging
     """
+    # Resolve at call time so env changes after import are picked up on rerun
+    agent_id = agent_id or os.environ.get("BQ_AGENT_ID", "")
+    if not agent_id:
+        return {
+            "answer": "BQ_AGENT_ID is not configured. Set it in `.env` (local) or `secrets.toml` (Streamlit Cloud).",
+            "sql": "",
+            "charts": [],
+            "raw": [],
+        }
+
     creds = _get_credentials()
     token = creds.token
 
@@ -228,4 +238,3 @@ def format_response(api_response: dict) -> str:
     Shows the answer text and, if present, the generated SQL in a code block.
     """
     return api_response.get("answer", "_No answer returned._")
-
