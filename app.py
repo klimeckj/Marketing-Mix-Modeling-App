@@ -23,7 +23,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from bq_agent import ask_bq_agent, call_orchestrator, create_orchestrator_session, format_response, load_from_bq, upload_to_bq
+from bq_agent import ask_bq_agent, format_response, load_from_bq, upload_to_bq
 
 RESULTS_DIR = Path("results")
 
@@ -967,12 +967,6 @@ with tab_chat:
         for i, msg in enumerate(st.session_state.messages):
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
-                if msg["role"] == "assistant":
-                    if msg.get("bq_called"):
-                        st.caption("_BQ analytics agent queried_")
-                    if msg.get("thoughts"):
-                        with st.expander("Show thoughts"):
-                            st.markdown(msg["thoughts"][0])
                 is_last = i == len(st.session_state.messages) - 1
                 if is_last and msg["role"] == "assistant":
                     for vega_spec in st.session_state.pop("_last_charts", []):
@@ -990,30 +984,13 @@ with tab_chat:
             st.session_state.messages.append({"role": "user", "content": prompt})
             prior = st.session_state.messages[:-1]
 
-            # Resolve orchestrator URL from Streamlit secrets or env var.
-            try:
-                _orchestrator_url = st.secrets.get("ORCHESTRATOR_URL", "")
-            except Exception:
-                _orchestrator_url = ""
-            _orchestrator_url = _orchestrator_url or os.environ.get("ORCHESTRATOR_URL", "")
-
-            if _orchestrator_url:
-                if "chat_session_id" not in st.session_state:
-                    st.session_state.chat_session_id = create_orchestrator_session(_orchestrator_url)
-                with st.spinner("Asking orchestrator…"):
-                    response = call_orchestrator(
-                        prompt, st.session_state.chat_session_id, _orchestrator_url
-                    )
-            else:
-                with st.spinner("Querying BigQuery agent…"):
-                    response = ask_bq_agent(prompt, bq_project, bq_dataset, history=prior)
+            with st.spinner("Querying BigQuery agent…"):
+                response = ask_bq_agent(prompt, bq_project, history=prior)
 
             answer = format_response(response)
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": answer,
-                "thoughts": response.get("thoughts", []),
-                "bq_called": response.get("bq_called", False),
             })
             if response.get("charts"):
                 st.session_state["_last_charts"] = response["charts"]
